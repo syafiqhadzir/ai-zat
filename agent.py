@@ -20,7 +20,7 @@ def generate_summary_node_function(state: GraphState) -> GraphState:
 
     prompt = (
         "You are an expert archeologist.\n"
-        "Study the given 'academic journal' carefully."
+        "You should response to the user by referring to the given 'academic journal'."
         f"Journal Content: {journal_content}\n"
     )
     
@@ -37,7 +37,7 @@ def generate_summary_node_function(state: GraphState) -> GraphState:
 def generate_answer(user_request, llm):
 
     prompt = (
-        "Based on the summary, look at the original User Request to make sure that you are answering the request properly!\n" +
+        "Based on the summary, look at the original user request to make sure that you are answering the request properly!\n" +
         f"User Request: {user_request}\n"
     )
     
@@ -72,7 +72,7 @@ def initialize_app(model_name: str):
         return build_workflow().compile()  # Return the compiled workflow
 
     # Initialize the LLM for the first time or switch models
-    st.session_state.llm = ChatGroq(model=model_name, temperature=0.0)
+    st.session_state.llm = ChatGroq(model=model_name, temperature=1.0)
     st.session_state.selected_model = model_name
     print(f"Using model: {model_name}")
     return build_workflow().compile()

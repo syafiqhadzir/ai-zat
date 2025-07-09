@@ -30,11 +30,11 @@ with st.sidebar:
     if selected_model != st.session_state.selected_model:
         st.session_state.selected_model = selected_model
         # Create a new LLM instance when model changes
-        st.session_state.llm = ChatGroq(model=selected_model, temperature=0.0)
-    
+        st.session_state.llm = ChatGroq(model=selected_model, temperature=1.0)
     # Initialize LLM if it doesn't exist
     if "llm" not in st.session_state:
-        st.session_state.llm = ChatGroq(model=selected_model, temperature=0.0)
+        st.session_state.llm = ChatGroq(model=selected_model, temperature=1.0)
+    
     
     reset_button = st.button("🔄 Reset Conversation", key="reset_button")
     if reset_button:
@@ -43,7 +43,6 @@ with st.sidebar:
 
     st.text("AFL-3.0: 2025 © Ikatan Ahli Arkeologi Malaysia.")
     
-
 # Initialize the app
 app = initialize_app(model_name=st.session_state.selected_model)
 
@@ -53,11 +52,6 @@ with st.expander("👋 Hi! Welcome to AI-Zat, your personal academic assistant!"
     AI-Zat is designed to help you with your academic needs, especially in the context of Jurnal Arkeologi Malaysia. 
     You can ask questions about the journal content, request summaries, or seek assistance with specific topics related to archaeology.
     """)
-
-# Display chat messages from history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
 
 # Get journal content
 journal_content = ""
@@ -81,7 +75,7 @@ if user_request:
 
     # Process with AI and get response
     with st.chat_message("assistant"):
-        with st.spinner("Generating test cases..."):
+        with st.spinner("Analysing ..."):
             # Include settings in the inputs
             inputs = {
                 "user_request": user_request,
