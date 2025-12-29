@@ -47,25 +47,21 @@ class RAGManager:
             logger.warning(f"FlashRank not available, disabling re-ranking: {e}")
             self.reranker = None
 
-    def ingest_text(self, text: str, source: str = "journal") -> None:
+    def ingest_documents(self, documents: List[Document]) -> None:
         """
-        Ingest raw text into the vector store.
+        Ingest a list of Documents with metadata into the vector store.
         
         Args:
-            text: Full text content.
-            source: Source metadata identifier.
+            documents: List of LangChain Documents.
         """
-        if not text:
-            logger.warning("No text provided for ingestion.")
+        if not documents:
+            logger.warning("No documents provided for ingestion.")
             return
 
         try:
-            # Create Documents
-            docs = [Document(page_content=text, metadata={"source": source})]
-            
             # Split
-            splits = self.text_splitter.split_documents(docs)
-            logger.info(f"Created {len(splits)} chunks from text.")
+            splits = self.text_splitter.split_documents(documents)
+            logger.info(f"Created {len(splits)} chunks from {len(documents)} pages.")
             
             # Index
             self.vector_store.add_documents(documents=splits)
