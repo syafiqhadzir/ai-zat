@@ -1,10 +1,9 @@
-"""RAG module for handling document chunking, embedding, and retrieval."""
+"""RAG module for handling document chunking, embedding, retrieval, and re-ranking."""
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-import chromadb
-from chromadb.utils import embedding_functions
+from flashrank import Ranker, RerankRequest
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -18,11 +17,11 @@ PERSIST_DIRECTORY = Path(".chroma_db")
 COLLECTION_NAME = "journal_collection"
 
 class RAGManager:
-    """Manages the Vector Database and Retrieval operations."""
+    """Manages the Vector Database, Retrieval, and Re-ranking operations."""
     
     def __init__(self) -> None:
-        """Initialize RAG Manager with local embeddings."""
-        # Use a lightweight local mode for speed/privacy
+        """Initialize RAG Manager with local embeddings and re-ranker."""
+        # Use a lightweight local model for speed/privacy
         self.embedding_fn = HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2"
         )
@@ -39,6 +38,14 @@ class RAGManager:
             chunk_overlap=200,
             add_start_index=True,
         )
+        
+        # Initialize FlashRank Re-ranker (Bleeding Edge!)
+        try:
+            self.reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir=".flashrank_cache")
+            logger.info("FlashRank Re-ranker initialized.")
+        except Exception as e:
+            logger.warning(f"FlashRank not available, disabling re-ranking: {e}")
+            self.reranker = None
 
     def ingest_text(self, text: str, source: str = "journal") -> None:
         """
@@ -68,21 +75,36 @@ class RAGManager:
             logger.error(f"Failed to ingest documents: {e}")
             raise
 
-    def retrieve(self, query: str, k: int = 4) -> List[Document]:
+    def retrieve(self, query: str, k: int = 4, rerank: bool = True) -> List[Document]:
         """
-        Retrieve relevant contexts for a query.
+        Retrieve relevant contexts for a query, with optional re-ranking.
         
         Args:
             query: User question.
             k: Number of chunks to retrieve.
+            rerank: Whether to apply re-ranking for better relevance.
             
         Returns:
             List of relevant Documents.
         """
         try:
-            results = self.vector_store.similarity_search(query, k=k)
-            logger.info(f"Retrieved {len(results)} chunks for query: '{query}'")
-            return results
+            # Initial retrieval (get more than needed for re-ranking)
+            candidates = self.vector_store.similarity_search(query, k=k * 3 if self.reranker and rerank else k)
+            logger.info(f"Retrieved {len(candidates)} initial candidates for query: '{query}'")
+
+            # Re-rank if enabled and available
+            if self.reranker and rerank and candidates:
+                passages = [{"id": i, "text": doc.page_content} for i, doc in enumerate(candidates)]
+                rerank_request = RerankRequest(query=query, passages=passages)
+                reranked = self.reranker.rerank(rerank_request)
+                
+                # Map back to Documents
+                reranked_docs = [candidates[int(r["id"])] for r in reranked[:k]]
+                logger.info(f"Re-ranked to top {len(reranked_docs)} results.")
+                return reranked_docs
+            
+            return candidates[:k]
+            
         except Exception as e:
             logger.error(f"Retrieval failed: {e}")
             return []
