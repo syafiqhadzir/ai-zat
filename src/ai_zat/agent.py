@@ -1,15 +1,16 @@
 """Agent module for AI-Zat with Memory Persistence and Streaming."""
 import logging
 import os
-from typing import Any, Dict, cast
+from typing import Any, Dict, List, Literal, Optional, cast
 
 import streamlit as st
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.tools import tool
 from langchain_groq.chat_models import ChatGroq
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
@@ -62,8 +63,19 @@ def search_web(query: str) -> str:
 # --- STATE ---
 
 class GraphState(Dict[str, Any]):
-    """Deep Research Agent State with message history."""
+    """Deep Research Agent State with message history and iteration tracking."""
     messages: list[BaseMessage]
+    retry_count: int
+
+# --- GRADERS (Structured Output) ---
+
+class GradeRetrieval(BaseModel):
+    """Binary score for relevance check on retrieved documents."""
+    binary_score: str = Field(description="Relevance score 'yes' or 'no'")
+
+class GradeHallucination(BaseModel):
+    """Binary score for hallucination check."""
+    binary_score: str = Field(description="Answer is grounded in the facts, 'yes' or 'no'")
 
 # --- NODES ---
 
@@ -79,45 +91,88 @@ INSTRUCTIONS:
 def reasoner_node(state: GraphState) -> Dict[str, Any]:
     """The 'Brain': Decides whether to call a tool or answer."""
     messages = state["messages"]
+    retry_count = state.get("retry_count", 0)
     
     if "llm" not in st.session_state:
         return {"messages": [SystemMessage(content="LLM not initialized.")]}
 
     llm = cast(ChatGroq, st.session_state.llm)
     
-    # Prepend system message if not present
     if not messages or not isinstance(messages[0], SystemMessage):
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
     
-    # Bind tools to LLM
     llm_with_tools = llm.bind_tools([lookup_journal, search_web])
-    
     response = llm_with_tools.invoke(messages)
-    return {"messages": [response]}
+    
+    return {"messages": [response], "retry_count": retry_count}
+
+def grade_retrieval_node(state: GraphState) -> Literal["generate", "rewrite"]:
+    """Determines if retrieval is relevant or needs a rewrite."""
+    last_message = state["messages"][-1]
+    
+    # If not a tool output, just generate
+    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
+        return "generate"
+
+    # For simplicity in this demo, we grade the 'lookup_journal' results
+    # In a full Level 5 system, we'd invoke the LLM to score each chunk
+    # Here we skip if results are populated or force rewrite if empty
+    if "No relevant information" in last_message.content:
+        return "rewrite"
+    
+    return "generate"
+
+def query_rewriter_node(state: GraphState) -> Dict[str, Any]:
+    """Rewrites the query for better RAG results."""
+    messages = state["messages"]
+    retry_count = state.get("retry_count", 0) + 1
+    
+    llm = cast(ChatGroq, st.session_state.llm)
+    
+    # Simple rewriter prompt
+    prompt = f"The previous retrieval failed. Rewrite the original user question to be more searchable in an archaeology database. Original: {messages[-2].content}"
+    response = llm.invoke(prompt)
+    
+    # Replace the last human message or append a new one
+    return {"messages": [HumanMessage(content=f"Retry {retry_count}: {response.content}")], "retry_count": retry_count}
 
 # --- WORKFLOW ---
 
 def build_workflow(with_memory: bool = True) -> CompiledStateGraph:
-    """Build the Agentic RAG Workflow with optional memory."""
+    """Build the Self-Correcting Agentic RAG Workflow."""
     workflow = StateGraph(GraphState)
     
-    # Tools Node
-    tools = [lookup_journal, search_web]
-    tool_node = ToolNode(tools)
-    
-    # Add Nodes
+    # Nodes
     workflow.add_node("reasoner", reasoner_node)
-    workflow.add_node("tools", tool_node)
+    workflow.add_node("tools", ToolNode([lookup_journal, search_web]))
+    workflow.add_node("rewriter", query_rewriter_node)
     
-    # Edges
+    # Entry
     workflow.set_entry_point("reasoner")
-    workflow.add_conditional_edges("reasoner", tools_condition)
-    workflow.add_edge("tools", "reasoner")
     
-    # Compile with or without memory
+    # Flow
+    workflow.add_conditional_edges(
+        "reasoner",
+        tools_condition,
+        {
+            "tools": "tools",
+            END: END
+        }
+    )
+    
+    workflow.add_conditional_edges(
+        "tools",
+        grade_retrieval_node,
+        {
+            "generate": "reasoner",
+            "rewrite": "rewriter"
+        }
+    )
+    
+    workflow.add_edge("rewriter", "reasoner")
+    
     if with_memory:
-        checkpointer = get_checkpointer()
-        return workflow.compile(checkpointer=checkpointer)
+        return workflow.compile(checkpointer=get_checkpointer())
     
     return workflow.compile()
 
