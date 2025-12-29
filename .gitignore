@@ -399,3 +399,40 @@ FodyWeavers.xsd
 
 # env file
 .env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+.pyre/
+
+# LangChain/LangGraph
+.langchain/
+
+# Streamlit
+.streamlit/secrets.toml

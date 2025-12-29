@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-zat"
+version = "0.2.0"
+description = "AI Agent for Jurnal Arkeologi Malaysia"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Ikatan Ahli Arkeologi Malaysia", email = "info@ikatan.my" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "streamlit>=1.52.2",
+    "langgraph>=0.2.60",
+    "langchain-groq>=1.1.1",
+    "langchain-core>=1.2.5",
+    "langchain-community>=0.3.0",
+    "langchain-chroma>=0.1.4",
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "tavily-python>=0.7.13",
+    "groq>=1.0.0",
+    "python-dotenv>=1.2.1",
+    "pypdf>=6.5.0",
+    "typing-extensions>=4.15.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pytest>=8.3.0",
+    "pip-audit>=2.7.0",
+    "pre-commit>=4.0.0",
+    "types-requests",
+    "types-PyYAML",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_zat"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "PL", "RUF"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+# Ignore missing types for heavy ML libs
+[[tool.mypy.overrides]]
+module = ["chromadb.*", "sentence_transformers.*", "pypdf.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra -q"

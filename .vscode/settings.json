@@ -1,0 +1,17 @@
+{
+    "python.analysis.typeCheckingMode": "basic",
+    "python.defaultInterpreterPath": ".venv/Scripts/python.exe",
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/.mypy_cache": true
+    }
+}

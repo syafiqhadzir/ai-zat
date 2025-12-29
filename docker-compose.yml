@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    container_name: ai_zat_app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/.env
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
