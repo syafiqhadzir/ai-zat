@@ -69,7 +69,7 @@ disallow_untyped_defs = true
 check_untyped_defs = true
 # Ignore missing types for heavy ML libs
 [[tool.mypy.overrides]]
-module = ["chromadb.*", "sentence_transformers.*", "pypdf.*"]
+module = ["chromadb.*", "sentence_transformers.*", "pypdf.*", "flashrank.*", "rank_bm25.*", "gtts.*", "langgraph.*", "streamlit.*", "langchain_groq.*", "langchain_community.*", "langchain_chroma.*", "langchain_core.*", "langchain_huggingface.*", "langchain_text_splitters.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -1,16 +1,16 @@
 """Agent module for AI-Zat with Memory Persistence and Streaming."""
 import logging
 import os
-from typing import Any, Dict, List, Literal, Optional, cast
+from typing import Any, Literal, cast
 
 import streamlit as st
-from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.tools import tool
 from langchain_groq.chat_models import ChatGroq
-from langchain_community.tools.tavily_search import TavilySearchResults
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
@@ -33,7 +33,8 @@ def get_checkpointer() -> SqliteSaver:
 def lookup_journal(query: str) -> str:
     """
     Search the Jurnal Arkeologi Malaysia for relevant information.
-    Use this tool FIRST for any questions about archaeology, history, or the journal content.
+    Use this tool FIRST for any questions about archaeology, history,
+    or the journal content.
     """
     docs = rag_manager.retrieve(query)
     if not docs:
@@ -62,7 +63,7 @@ def search_web(query: str) -> str:
 
 # --- STATE ---
 
-class GraphState(Dict[str, Any]):
+class GraphState(dict[str, Any]):
     """Deep Research Agent State with message history and iteration tracking."""
     messages: list[BaseMessage]
     retry_count: int
@@ -75,11 +76,12 @@ class GradeRetrieval(BaseModel):
 
 class GradeHallucination(BaseModel):
     """Binary score for hallucination check."""
-    binary_score: str = Field(description="Answer is grounded in the facts, 'yes' or 'no'")
+    binary_score: str = Field(description="Is answer grounded in facts? 'yes'/'no'")
 
 # --- NODES ---
 
-SYSTEM_PROMPT = """You are an expert archaeologist assistant for Jurnal Arkeologi Malaysia.
+SYSTEM_PROMPT = """You are an expert archaeologist assistant for \
+Jurnal Arkeologi Malaysia.
 
 INSTRUCTIONS:
 1. ALWAYS use the 'lookup_journal' tool first to find relevant information.
@@ -88,7 +90,7 @@ INSTRUCTIONS:
 4. Maintain an academic yet accessible tone.
 5. If you cannot find the answer, say so honestly."""
 
-def reasoner_node(state: GraphState) -> Dict[str, Any]:
+def reasoner_node(state: GraphState) -> dict[str, Any]:
     """The 'Brain': Decides whether to call a tool or answer."""
     messages = state["messages"]
     retry_count = state.get("retry_count", 0)
@@ -99,7 +101,7 @@ def reasoner_node(state: GraphState) -> Dict[str, Any]:
     llm = cast(ChatGroq, st.session_state.llm)
     
     if not messages or not isinstance(messages[0], SystemMessage):
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+        messages = [SystemMessage(content=SYSTEM_PROMPT), *messages]
     
     llm_with_tools = llm.bind_tools([lookup_journal, search_web])
     response = llm_with_tools.invoke(messages)
@@ -122,7 +124,7 @@ def grade_retrieval_node(state: GraphState) -> Literal["generate", "rewrite"]:
     
     return "generate"
 
-def query_rewriter_node(state: GraphState) -> Dict[str, Any]:
+def query_rewriter_node(state: GraphState) -> dict[str, Any]:
     """Rewrites the query for better RAG results."""
     messages = state["messages"]
     retry_count = state.get("retry_count", 0) + 1
@@ -130,11 +132,18 @@ def query_rewriter_node(state: GraphState) -> Dict[str, Any]:
     llm = cast(ChatGroq, st.session_state.llm)
     
     # Simple rewriter prompt
-    prompt = f"The previous retrieval failed. Rewrite the original user question to be more searchable in an archaeology database. Original: {messages[-2].content}"
+    prompt = (
+        "The previous retrieval failed. Rewrite the original user question to "
+        "be more searchable in an archaeology database. "
+        f"Original: {messages[-2].content}"
+    )
     response = llm.invoke(prompt)
     
     # Replace the last human message or append a new one
-    return {"messages": [HumanMessage(content=f"Retry {retry_count}: {response.content}")], "retry_count": retry_count}
+    return {
+        "messages": [HumanMessage(content=f"Retry {retry_count}: {response.content}")],
+        "retry_count": retry_count
+    }
 
 # --- WORKFLOW ---
 
@@ -178,7 +187,8 @@ def build_workflow(with_memory: bool = True) -> CompiledStateGraph:
 
 def initialize_agent(model_name: str, with_memory: bool = True) -> CompiledStateGraph:
     """Initialize agent with model and optional memory persistence."""
-    if "llm" not in st.session_state or st.session_state.get("selected_model") != model_name:
+    current_model = st.session_state.get("selected_model")
+    if "llm" not in st.session_state or current_model != model_name:
         # Enable LangSmith tracing if configured
         if os.getenv("LANGCHAIN_TRACING_V2"):
             logger.info("LangSmith tracing enabled.")

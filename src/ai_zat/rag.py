@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Optional
 
 from flashrank import Ranker, RerankRequest
 from langchain_chroma import Chroma
@@ -51,14 +51,14 @@ class RAGManager:
 
         # Hybrid Search: BM25
         self.bm25: Optional[BM25Okapi] = None
-        self.corpus_docs: List[Document] = []
+        self.corpus_docs: list[Document] = []
         self._load_corpus()
 
     def _load_corpus(self) -> None:
         """Load corpus from JSON for BM25 persistence."""
         if CORPUS_PATH.exists():
             try:
-                with open(CORPUS_PATH, "r", encoding="utf-8") as f:
+                with open(CORPUS_PATH, encoding="utf-8") as f:
                     data = json.load(f)
                     self.corpus_docs = [Document(**d) for d in data]
                 self._build_bm25()
@@ -82,7 +82,7 @@ class RAGManager:
         tokenized_corpus = [doc.page_content.lower().split() for doc in self.corpus_docs]
         self.bm25 = BM25Okapi(tokenized_corpus)
 
-    def ingest_documents(self, documents: List[Document]) -> None:
+    def ingest_documents(self, documents: list[Document]) -> None:
         """
         Ingest a list of Documents with metadata into the vector store.
         
@@ -112,7 +112,7 @@ class RAGManager:
             logger.error(f"Failed to ingest documents: {e}")
             raise
 
-    def retrieve(self, query: str, k: int = 4, rerank: bool = True) -> List[Document]:
+    def retrieve(self, query: str, k: int = 4, rerank: bool = True) -> list[Document]:
         """
         Retrieve relevant contexts using Hybrid Search (Vector + BM25) and RRF.
         """
@@ -121,7 +121,7 @@ class RAGManager:
             vector_results = self.vector_store.similarity_search(query, k=k * 2)
             
             # 2. BM25 Search
-            bm25_results: List[Document] = []
+            bm25_results: list[Document] = []
             if self.bm25:
                 tokenized_query = query.lower().split()
                 bm25_results = self.bm25.get_top_n(tokenized_query, self.corpus_docs, n=k * 2)
@@ -146,10 +146,10 @@ class RAGManager:
             logger.error(f"Retrieval failed: {e}")
             return []
 
-    def _reciprocal_rank_fusion(self, vector_docs: List[Document], bm25_docs: List[Document], k: int = 10, c: int = 60) -> List[Document]:
+    def _reciprocal_rank_fusion(self, vector_docs: list[Document], bm25_docs: list[Document], k: int = 10, c: int = 60) -> list[Document]:
         """Combine results using Reciprocal Rank Fusion."""
-        scores: Dict[str, float] = {}
-        doc_map: Dict[str, Document] = {}
+        scores: dict[str, float] = {}
+        doc_map: dict[str, Document] = {}
 
         for rank, doc in enumerate(vector_docs):
             doc_id = doc.page_content # Use content as ID for simplicity
@@ -182,19 +182,6 @@ class RAGManager:
         except Exception as e:
             logger.error(f"Failed to clear database: {e}")
             
-    def clear_database(self) -> None:
-        """Clear the existing vector store."""
-        try:
-            self.vector_store.delete_collection()
-            logger.info("Vector database cleared.")
-            # Re-init after delete
-            self.vector_store = Chroma(
-                collection_name=COLLECTION_NAME,
-                embedding_function=self.embedding_fn,
-                persist_directory=str(PERSIST_DIRECTORY)
-            )
-        except Exception as e:
-            logger.error(f"Failed to clear database: {e}")
 
 # Global instance
 rag_manager = RAGManager()
