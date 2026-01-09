@@ -14,7 +14,7 @@ gTTS>=2.5.0
 tavily-python==0.7.13
 groq==1.0.0
 python-dotenv==1.2.1
-pypdf==6.5.0
+pypdf==6.6.0
 typing-extensions==4.15.0
 # Dev dependencies
 ruff
